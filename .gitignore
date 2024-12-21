@@ -1,0 +1,7 @@
+# Build files
+build/
+*.o
+*.out
+
+# Config files
+*.cfg
