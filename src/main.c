@@ -1,6 +1,11 @@
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+#include <ncurses.h>
 
 #include "log.h"
 #include "version.h"
@@ -8,7 +13,7 @@
 #define CONFIG_FILE "config.cfg"
 
 // default settings
-#define DEFAULT_PORT 8080
+#define DEFAULT_PORT 1022
 #define DEFAULT_WELCOME_MESSAGE "Welcome to MioChat!"
 #define DEFAULT_DB_PATH "data.db"
 #define DEFAULT_IS_DEBUG 1
@@ -29,6 +34,10 @@ int main(int argc, char *argv[]) {
 
   Config config;
 
+  int server_fd, client_fd;
+  struct sockaddr_in server_addr, client_addr;
+  socklen_t client_len = sizeof(client_addr);
+
   // try to read config file
   if (read_config(CONFIG_FILE, &config) != 0) {
     log_message(LOG_WARN,
@@ -44,12 +53,73 @@ int main(int argc, char *argv[]) {
     config = default_config;
   }
 
-  log_message(LOG_INFO, "Server is running on port %d", config.port);
+  log_message(LOG_INFO, "Starting server on port %d", config.port);
+  if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    log_message(LOG_ERROR, "Socket failed.");
+    exit(EXIT_FAILURE);
+  }
+
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_addr.s_addr = INADDR_ANY;
+  server_addr.sin_port = htons(config.port);
+
+  // bind socket
+  if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
+      0) {
+    log_message(LOG_ERROR, "Socket bind failed.");
+    close(server_fd);
+    exit(EXIT_FAILURE);
+  }
+
+  // listen port
+  if (listen(server_fd, 3) < 0) {
+    log_message(LOG_ERROR, "Listen failed.");
+    close(server_fd);
+    exit(EXIT_FAILURE);
+  }
+
   log_message(LOG_INFO, "Data is %s", config.db_path);
 
   if (config.is_debug == 1) {
     log_message(LOG_WARN, "Server is running on DEBUG mode.");
   }
+
+  // wait client connect
+  if ((client_fd = accept(server_fd, (struct sockaddr *)&client_addr,
+                          &client_len)) < 0) {
+    log_message(LOG_ERROR, "Client accept failed.");
+    close(server_fd);
+    exit(EXIT_FAILURE);
+  }
+
+  initscr();
+  raw();                // disable line buffer
+  keypad(stdscr, TRUE); // enable keyboard input
+  noecho();             // disable echo
+
+  // send welcome message
+  write(client_fd, config.welcome_message, strlen(config.welcome_message));
+
+  // enter a simple ncurses interface
+  mvprintw(5, 5, "Welcome");
+
+  refresh(); // refresh display
+
+  while (1) {
+    int ch = getch();
+    if (ch == 'q') {
+      break;
+    }
+    mvprintw(7, 5, "You pressed %c", ch);
+    refresh();
+  }
+
+  endwin();
+
+  close(server_fd);
+  close(client_fd);
+
+  return 0;
 
   return 0;
 }

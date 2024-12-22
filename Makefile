@@ -9,7 +9,7 @@ OBJS = $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 CC = gcc
 CFLAGS = -Wall -g
-LDFLAGS = 
+LDFLAGS = -lncurses
 
 all: $(BUILD_DIR)/$(PROJECT_NAME)
 
